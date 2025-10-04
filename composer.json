@@ -1,10 +1,10 @@
 {
-    "name": "backpack/crud",
+    "name": "parabellumkoval/crud",
     "version": "dev-store",
     "type": "library",
     "description": "Quickly build an admin interfaces using Laravel, CoreUI, Bootstrap and jQuery.",
     "keywords": [
-        "backpack",
+        "parabellumkoval",
         "base",
         "admin panel for laravel",
         "coreui for laravel",
@@ -22,16 +22,9 @@
         "content management system",
         "content management framework"
     ],
-    "homepage": "https://github.com/laravel-backpack/CRUD",
+    "homepage": "https://github.com/parabellumkoval/CRUD",
     "license": "proprietary",
-    "authors": [
-        {
-            "name": "Cristian Tabacitu",
-            "email": "tabacitu@backpackforlaravel.com",
-            "homepage": "https://backpackforlaravel.com",
-            "role": "Creator & Maintainer"
-        }
-    ],
+    "authors": [],
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0",
