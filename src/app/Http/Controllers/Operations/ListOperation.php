@@ -70,68 +70,91 @@ trait ListOperation
     public function search()
     {
         $this->crud->hasAccessOrFail('list');
-
         $this->crud->applyUnappliedFilters();
 
-        $totalRows = $this->crud->model->count();
-        $filteredRows = $this->crud->query->toBase()->getCountForPagination();
-        $startIndex = request()->input('start') ?: 0;
-        // if a search term was present
-        if (request()->input('search') && request()->input('search')['value']) {
-            // filter the results accordingly
-            $this->crud->applySearchTerm(request()->input('search')['value']);
-            // recalculate the number of filtered rows
-            $filteredRows = $this->crud->count();
+        // Фильтрация по parent_id для вложенных таблиц (НЕ ломая основной список)
+        $parentId = request('parent_id');
+        if ($parentId !== null && $parentId !== '') {
+            $this->crud->query->where('parent_id', $parentId);
         }
-        // start the results according to the datatables pagination
-        if (request()->input('start')) {
-            $this->crud->skip((int) request()->input('start'));
-        }
-        // limit the number of results according to the datatables pagination
-        if (request()->input('length')) {
-            $this->crud->take((int) request()->input('length'));
-        }
-        // overwrite any order set in the setup() method with the datatables order
-        if (request()->input('order')) {
-            // clear any past orderBy rules
-            $this->crud->query->getQuery()->orders = null;
-            foreach ((array) request()->input('order') as $order) {
-                $column_number = (int) $order['column'];
-                $column_direction = (strtolower((string) $order['dir']) == 'asc' ? 'ASC' : 'DESC');
-                $column = $this->crud->findColumnById($column_number);
-                if ($column['tableColumn'] && ! isset($column['orderLogic'])) {
-                    // apply the current orderBy rules
-                    $this->crud->orderByWithPrefix($column['name'], $column_direction);
-                }
 
-                // check for custom order logic in the column definition
+        // total / filtered
+        $baseCountQuery = clone $this->crud->query;
+        $totalRows = $baseCountQuery->toBase()->getCountForPagination();
+        $filteredRows = $totalRows;
+        $startIndex = (int) (request('start') ?? 0);
+
+        // поиск
+        if ($term = data_get(request()->input('search'), 'value')) {
+            $this->crud->applySearchTerm($term);
+            $filteredRows = (clone $this->crud->query)->toBase()->getCountForPagination();
+        }
+
+        // пагинация
+        if (request()->filled('start'))  $this->crud->skip((int) request('start'));
+        if (request()->filled('length')) $this->crud->take((int) request('length'));
+
+        // порядок (как в Backpack)
+        if ($orders = request('order')) {
+            $this->crud->query->getQuery()->orders = null;
+            foreach ($orders as $order) {
+                $colIdx = (int) $order['column'];
+                $dir    = strtolower((string) $order['dir']) === 'asc' ? 'ASC' : 'DESC';
+                $column = $this->crud->findColumnById($colIdx);
+                if ($column['tableColumn'] && !isset($column['orderLogic'])) {
+                    $this->crud->orderByWithPrefix($column['name'], $dir);
+                }
                 if (isset($column['orderLogic'])) {
-                    $this->crud->customOrderBy($column, $column_direction);
+                    $this->crud->customOrderBy($column, $dir);
                 }
             }
         }
 
-        // show newest items first, by default (if no order has been set for the primary column)
-        // if there was no order set, this will be the only one
-        // if there was an order set, this will be the last one (after all others were applied)
-        // Note to self: `toBase()` returns also the orders contained in global scopes, while `getQuery()` don't.
-        $orderBy = $this->crud->query->toBase()->orders;
+        // если сортировка по PK не задана — добавим
         $table = $this->crud->model->getTable();
-        $key = $this->crud->model->getKeyName();
-
-        $hasOrderByPrimaryKey = collect($orderBy)->some(function ($item) use ($key, $table) {
+        $key   = $this->crud->model->getKeyName();
+        $ordersNow = $this->crud->query->toBase()->orders;
+        $hasOrderByPk = collect($ordersNow)->some(function ($item) use ($key, $table) {
             return (isset($item['column']) && $item['column'] === $key)
                 || (isset($item['sql']) && str_contains($item['sql'], "$table.$key"));
         });
-
-        if (! $hasOrderByPrimaryKey) {
-            $this->crud->orderByWithPrefix($this->crud->model->getKeyName(), 'DESC');
+        if (!$hasOrderByPk) {
+            $this->crud->orderByWithPrefix($key, 'DESC');
         }
 
         $entries = $this->crud->getEntries();
 
-        return $this->crud->getEntriesAsJsonForDatatables($entries, $totalRows, $filteredRows, $startIndex);
+        // строим стандартный JSON backpack
+        $json = $this->crud->getEntriesAsJsonForDatatables($entries, $totalRows, $filteredRows, $startIndex);
+
+        // ---- DRESS ----
+        $childrenMap = [];
+
+        if($parentId) {
+            // возьмём PK и посчитаем детей для них
+            $ids  = $entries->pluck($key)->all();
+
+            if (!empty($ids)) {
+                $childrenMap = $this->crud->model->newQuery()
+                    ->selectRaw('parent_id, COUNT(*) AS cnt')
+                    ->whereIn('parent_id', $ids)
+                    ->groupBy('parent_id')
+                    ->pluck('cnt', 'parent_id')
+                    ->all();
+            }
+        }
+
+        // аккуратно вплетаем в json построчно (порядок сохранён)
+        foreach (array_values($entries->all()) as $i => $entry) {
+            $id = $entry->getKey();
+            // гарантируем два ключа для клиента
+            $json['data'][$i]['___id'] = $id;
+            $json['data'][$i]['has_children'] = !empty($childrenMap[$id]);
+        }
+
+        return $json;
     }
+
 
     /**
      * Used with AJAX in the list view (datatables) to show extra information about that row that didn't fit in the table.

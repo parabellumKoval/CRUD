@@ -50,14 +50,16 @@ trait AutoSet
      */
     public function getDbColumnTypes()
     {
-        $this->setDoctrineTypesMapping();
-
         $dbColumnTypes = [];
+        $schema = $this->model->getConnection()->getSchemaBuilder();
+        $columns = $schema->getColumns($this->model->getTable());
 
-        foreach ($this->getDbTableColumns() as $key => $column) {
-            $column_type = $column->getType()->getName();
-            $dbColumnTypes[$column->getName()]['type'] = trim(preg_replace('/\(\d+\)(.*)/i', '', $column_type));
-            $dbColumnTypes[$column->getName()]['default'] = $column->getDefault();
+        foreach ($columns as $column) {
+            $columnName = $column['name'];
+            $columnType = $column['type_name'];
+            
+            $dbColumnTypes[$columnName]['type'] = trim(preg_replace('/\(\d+\)(.*)/i', '', $columnType));
+            $dbColumnTypes[$columnName]['default'] = $column['default'];
         }
 
         $this->autoset['db_column_types'] = $dbColumnTypes;
@@ -77,8 +79,8 @@ trait AutoSet
         }
 
         $conn = $this->model->getConnection();
-        $table = $conn->getTablePrefix().$this->model->getTable();
-        $columns = $conn->getDoctrineSchemaManager()->listTableColumns($table);
+        $table = $this->model->getTable();
+        $columns = $conn->getSchemaBuilder()->getColumns($table);
 
         $this->autoset['table_columns'] = $columns;
 

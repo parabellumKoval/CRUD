@@ -37,28 +37,30 @@
     ></div>
 
     @push('before_scripts')
-    <div class="col-md-12 well repeatable-element row m-1 p-2" data-repeatable-identifier="{{ $field['name'] }}">
-      @if (isset($field['fields']) && is_array($field['fields']) && count($field['fields']))
-        <div class="controls">
-            <button type="button" class="close delete-element"><span aria-hidden="true">×</span></button>
-            <button type="button" class="close move-element-up">
-                <svg viewBox="0 0 64 80"><path d="M46.8,36.7c-4.3-4.3-8.7-8.7-13-13c-1-1-2.6-1-3.5,0c-4.3,4.3-8.7,8.7-13,13c-2.3,2.3,1.3,5.8,3.5,3.5c4.3-4.3,8.7-8.7,13-13c-1.2,0-2.4,0-3.5,0c4.3,4.3,8.7,8.7,13,13C45.5,42.5,49,39,46.8,36.7L46.8,36.7z"/></svg>
-            </button>
-            <button type="button" class="close move-element-down">
-                <svg viewBox="0 0 64 80"><path d="M17.2,30.3c4.3,4.3,8.7,8.7,13,13c1,1,2.6,1,3.5,0c4.3-4.3,8.7-8.7,13-13c2.3-2.3-1.3-5.8-3.5-3.5c-4.3,4.3-8.7,8.7-13,13c1.2,0,2.4,0,3.5,0c-4.3-4.3-8.7-8.7-13-13C18.5,24.5,15,28,17.2,30.3L17.2,30.3z"/></svg>
-            </button>
+    <div hidden>
+        <div class="col-md-12 well repeatable-element row m-1 p-2" data-repeatable-identifier="{{ $field['name'] }}">
+        @if (isset($field['fields']) && is_array($field['fields']) && count($field['fields']))
+            <div class="controls">
+                <button type="button" class="close delete-element"><span aria-hidden="true">×</span></button>
+                <button type="button" class="close move-element-up">
+                    <svg viewBox="0 0 64 80"><path d="M46.8,36.7c-4.3-4.3-8.7-8.7-13-13c-1-1-2.6-1-3.5,0c-4.3,4.3-8.7,8.7-13,13c-2.3,2.3,1.3,5.8,3.5,3.5c4.3-4.3,8.7-8.7,13-13c-1.2,0-2.4,0-3.5,0c4.3,4.3,8.7,8.7,13,13C45.5,42.5,49,39,46.8,36.7L46.8,36.7z"/></svg>
+                </button>
+                <button type="button" class="close move-element-down">
+                    <svg viewBox="0 0 64 80"><path d="M17.2,30.3c4.3,4.3,8.7,8.7,13,13c1,1,2.6,1,3.5,0c4.3-4.3,8.7-8.7,13-13c2.3-2.3-1.3-5.8-3.5-3.5c-4.3,4.3-8.7,8.7-13,13c1.2,0,2.4,0,3.5,0c-4.3-4.3-8.7-8.7-13-13C18.5,24.5,15,28,17.2,30.3L17.2,30.3z"/></svg>
+                </button>
+            </div>
+            @foreach($field['fields'] as $subfield)
+            @php
+                $subfield = $crud->makeSureFieldHasNecessaryAttributes($subfield);
+                $fieldViewNamespace = $subfield['view_namespace'] ?? 'crud::fields';
+                $fieldViewPath = $fieldViewNamespace.'.'.$subfield['type'];
+            @endphp
+
+            @include($fieldViewPath, ['field' => $subfield])
+            @endforeach
+
+        @endif
         </div>
-        @foreach($field['fields'] as $subfield)
-          @php
-              $subfield = $crud->makeSureFieldHasNecessaryAttributes($subfield);
-              $fieldViewNamespace = $subfield['view_namespace'] ?? 'crud::fields';
-              $fieldViewPath = $fieldViewNamespace.'.'.$subfield['type'];
-          @endphp
-
-          @include($fieldViewPath, ['field' => $subfield])
-        @endforeach
-
-      @endif
     </div>
     @endpush
 
@@ -153,12 +155,11 @@
          * The method that initializes the javascript on this field type.
          */
         function bpFieldInitRepeatableElement(element) {
-
             var field_name = element.attr('name');
 
             // element will be a jQuery wrapped DOM node
-            var container = $('[data-repeatable-identifier='+field_name+']');
-            var container_holder = $('[data-repeatable-holder='+field_name+']');
+            var container = $('[data-repeatable-identifier='+CSS.escape(field_name)+']');
+            var container_holder = $('[data-repeatable-holder='+CSS.escape(field_name)+']');
 
             var init_rows = Number(container_holder.attr('data-init-rows'));
             var min_rows = Number(container_holder.attr('data-min-rows'));
@@ -225,7 +226,7 @@
             var new_field_group = field_group.clone();
 
             // this is the container that holds the group of fields inside the main form.
-            var container_holder = $('[data-repeatable-holder='+field_name+']');
+            var container_holder = $('[data-repeatable-holder='+CSS.escape(field_name)+']');
 
             new_field_group.find('.delete-element').click(function(){
                 new_field_group.find('input, select, textarea').each(function(i, el) {

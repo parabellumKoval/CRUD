@@ -220,7 +220,12 @@ trait Search
         }
 
         // add the details_row button to the first column
-        if ($this->getOperationSetting('detailsRow')) {
+        //
+        $enabledDetailsRow = method_exists($entry, 'getEnabledDetailsRowAttribute')? (bool)$entry->enabledDetailsRow: true;
+        if ($this->getOperationSetting('detailsRow') 
+            // DRESS: Conditional +
+            && $enabledDetailsRow
+        ) {
             $details_row_button = \View::make('crud::columns.inc.details_row_button')
                                            ->with('crud', $this)
                                            ->with('entry', $entry)

@@ -234,28 +234,90 @@ trait Fields
      * So that they are not json_encoded twice before they are stored in the db
      * (once by Backpack in front-end, once by Laravel Attribute Casting).
      */
-    public function decodeJsonCastedAttributes($data)
+    public function decodeJsonCastedAttributes(array $data): array
     {
         $fields = $this->getFields();
-        $casted_attributes = $this->model->getCastedAttributes();
+
+        // 1) Laravel 9+: используем getCasts()
+        $casts = method_exists($this->model, 'getCasts')
+            ? $this->model->getCasts()
+            : (method_exists($this->model, 'getCastedAttributes') ? $this->model->getCastedAttributes() : []);
+
+        // 2) Не трогаем переводимые поля Spatie — пусть их обработает HasTranslations
+        $translatable = method_exists($this->model, 'getTranslatableAttributes')
+            ? (array) $this->model->getTranslatableAttributes()
+            : [];
 
         foreach ($fields as $field) {
+            $name = $field['name'] ?? null;
 
-            // Test the field is castable
-            if (isset($field['name']) && is_string($field['name']) && array_key_exists($field['name'], $casted_attributes)) {
-
-                // Handle JSON field types
-                $jsonCastables = ['array', 'object', 'json'];
-                $fieldCasting = $casted_attributes[$field['name']];
-
-                if (in_array($fieldCasting, $jsonCastables) && isset($data[$field['name']]) && ! empty($data[$field['name']]) && ! is_array($data[$field['name']])) {
-                    try {
-                        $data[$field['name']] = json_decode($data[$field['name']]);
-                    } catch (\Exception $e) {
-                        $data[$field['name']] = [];
-                    }
-                }
+            if (!is_string($name)) {
+                continue;
             }
+
+            // skip spatie/translatable attributes
+            if (in_array($name, $translatable, true)) {
+                continue;
+            }
+
+            if (!array_key_exists($name, $casts) || !array_key_exists($name, $data)) {
+                continue;
+            }
+
+            $value = $data[$name];
+
+            // уже массив/объект с фронта — ничего не делаем
+            if (!is_string($value)) {
+                continue;
+            }
+
+            $cast = $casts[$name];
+
+            // нормализуем encrypted:* → извлечём тип после двоеточия
+            if (is_string($cast) && str_starts_with($cast, 'encrypted:')) {
+                $cast = substr($cast, strlen('encrypted:'));
+            }
+
+            // 3) Расширенный список JSON-кастов (включая классовые)
+            $jsonScalarCasts = ['array', 'json', 'object', 'collection'];
+            $jsonClassCasts = [
+                Illuminate\Database\Eloquent\Casts\AsArrayObject::class,
+                Illuminate\Database\Eloquent\Casts\AsCollection::class,
+                Illuminate\Database\Eloquent\Casts\AsEncryptedArrayObject::class,
+                Illuminate\Database\Eloquent\Casts\AsEncryptedCollection::class,
+            ];
+
+            $isJsonish =
+                (is_string($cast) && in_array($cast, $jsonScalarCasts, true)) ||
+                (is_string($cast) && in_array($cast, $jsonClassCasts, true)) ||
+                (is_string($cast) && class_exists($cast) &&
+                    is_subclass_of($cast, Illuminate\Contracts\Database\Eloquent\CastsAttributes::class));
+
+            if (!$isJsonish) {
+                continue;
+            }
+
+            $value = trim($value);
+            if ($value === '') {
+                // оставим пустую строку как есть — пусть следующий слой решит что с ней делать
+                // (или можно $data[$name] = []; если нужно именно пустой JSON-массив)
+                continue;
+            }
+
+            // 4) Декодируем в МАССИВ, с выбросом исключений при ошибке
+            try {
+                $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                // невалидный JSON → безопасный дефолт (массив)
+                $decoded = [];
+            }
+
+            // Если явно указан каст 'object' — приводим к объекту
+            if ($casts[$name] === 'object' && is_array($decoded)) {
+                $decoded = (object) $decoded;
+            }
+
+            $data[$name] = $decoded;
         }
 
         return $data;

@@ -1,6 +1,11 @@
 @php
     $field['allows_null'] = $field['allows_null'] ?? $crud->model::isColumnNullable($field['name']);
+
+    $currentValue = old(square_brackets_to_dots($field['name']))
+        ?? ($field['value'] ?? ($field['default'] ?? null));
+    \Log::info($field['name'] . ' - ' . $currentValue . ' - ' . old(square_brackets_to_dots($field['name'])));
 @endphp
+
 <!-- select from array -->
 @include('crud::fields.inc.wrapper_start')
     <label>{!! $field['label'] !!}</label>

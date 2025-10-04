@@ -3,6 +3,7 @@
 namespace Backpack\CRUD\app\Models\Traits;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 trait HasIdentifiableAttribute
 {
@@ -33,12 +34,16 @@ trait HasIdentifiableAttribute
     private static function guessIdentifiableColumnName()
     {
         $instance = new static();
-        $conn = $instance->getConnectionWithExtraTypeMappings();
-        $table = $instance->getTableWithPrefix();
-        $columns = $conn->getDoctrineSchemaManager()->listTableColumns($table);
-        $indexes = $conn->getDoctrineSchemaManager()->listTableIndexes($table);
-        $columnsNames = array_keys($columns);
-
+        $table = $instance->getTable();
+        
+        // Get all columns using Laravel's Schema builder
+        $columnsNames = Schema::getColumnListing($table);
+        
+        // Get indexed columns
+        $indexes = Schema::getConnection()
+            ->getSchemaBuilder()
+            ->getIndexes($table);
+        
         // these column names are sensible defaults for lots of use cases
         $sensibleDefaultNames = ['name', 'title', 'description', 'label'];
 
@@ -50,21 +55,25 @@ trait HasIdentifiableAttribute
             }
         }
 
+        // Get all columns with their properties
+        $columns = Schema::getConnection()
+            ->getSchemaBuilder()
+            ->getColumns($table);
+
         // get indexed columns in database table
         $indexedColumns = [];
-        foreach ($indexes as $index) {
-            $indexColumns = $index->getColumns();
-            foreach ($indexColumns as $ic) {
-                array_push($indexedColumns, $ic);
+        foreach ($indexes as $indexName => $index) {
+            if (isset($index['columns']) && is_array($index['columns'])) {
+                $indexedColumns = array_merge($indexedColumns, $index['columns']);
             }
         }
 
         // if none of the sensible defaults exists
         // we get the first column from database
         // that is NOT indexed (usually primary, foreign keys)
-        foreach ($columns as $columnName => $columnProperties) {
+        foreach ($columns as $column) {
+            $columnName = $column['name'];
             if (! in_array($columnName, $indexedColumns)) {
-
                 //check for convention "field<_id>" in case developer didn't add foreign key constraints.
                 if (strpos($columnName, '_id') !== false) {
                     continue;

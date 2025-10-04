@@ -151,10 +151,12 @@
 
 @section('after_scripts')
   @include('crud::inc.datatables_logic')
+  @include('crud::inc.tree_list_logic')
+
   <script src="{{ asset('packages/backpack/crud/js/crud.js').'?v='.config('backpack.base.cachebusting_string') }}"></script>
   <script src="{{ asset('packages/backpack/crud/js/form.js').'?v='.config('backpack.base.cachebusting_string') }}"></script>
   <script src="{{ asset('packages/backpack/crud/js/list.js').'?v='.config('backpack.base.cachebusting_string') }}"></script>
 
   <!-- CRUD LIST CONTENT - crud_list_scripts stack -->
-  @stack('crud_list_scripts')
+  @stack('crud_list_scripts')  
 @endsection

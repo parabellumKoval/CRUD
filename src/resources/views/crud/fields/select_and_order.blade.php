@@ -6,6 +6,12 @@
 
 @include('crud::fields.inc.wrapper_start')
     <label>{!! $field['label'] !!}</label>
+
+
+    {{-- HINT --}}
+    @if (isset($field['hint']))
+        <p class="help-block">{!! $field['hint'] !!}</p>
+    @endif
     @include('crud::fields.inc.translatable_icon')
     <div class="row"
          data-init-function="bpFieldInitSelectAndOrderElement"
@@ -24,11 +30,6 @@
                 </select>
             </div>
         </div>
-
-    {{-- HINT --}}
-    @if (isset($field['hint']))
-        <p class="help-block">{!! $field['hint'] !!}</p>
-    @endif
     </div>
 @include('crud::fields.inc.wrapper_end')
 
@@ -122,7 +123,7 @@
 
         // initialize jQueryUI sortable
         $( "#"+$allId+", #"+$selectedId ).sortable({
-            connectWith: "."+$fieldName+"_connectedSortable",
+            connectWith: "."+CSS.escape($fieldName)+"_connectedSortable",
             create: function (event, ui) {
                 // populate all options in the right-hand area (aka $dragSource)
                 if (Object.keys($allOptions).length) {

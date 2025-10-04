@@ -44,6 +44,24 @@
     @stack('crud_fields_scripts')
 
     <script>
+
+    function deinitializeFieldsWithJavascript(container) {
+      var selector;
+      if (container instanceof jQuery) {
+        selector = container;
+      } else {
+        selector = $(container);
+      }
+        // console.log('deinitialize', 'each', selector)
+
+      // 
+      selector.find("[data-init-function]").each(function () {
+        var element = $(this);
+        element.attr('data-initialized', 'false');
+        // console.log('de', 'each', element)
+      });
+    }
+
     function initializeFieldsWithJavascript(container) {
       var selector;
       if (container instanceof jQuery) {
@@ -51,10 +69,14 @@
       } else {
         selector = $(container);
       }
+
+      // console.log('init', selector)
+      // .not("[data-initialized=true]")
       selector.find("[data-init-function]").not("[data-initialized=true]").each(function () {
         var element = $(this);
         var functionName = element.data('init-function');
 
+      // console.log('each', element)
         if (typeof window[functionName] === "function") {
           window[functionName](element);
 

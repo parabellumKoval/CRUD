@@ -20,13 +20,24 @@ trait HasRelationshipFields
      */
     public function getConnectionWithExtraTypeMappings()
     {
-        $conn = DB::connection($this->getConnectionName());
+        $connection = DB::connection($this->getConnectionName());
+        
+        // Only proceed if using a SQL driver
+        if (!in_array($connection->getDriverName(), ['mysql', 'pgsql', 'sqlite', 'sqlsrv'])) {
+            return $connection;
+        }
 
-        // register the enum, and jsonb types
-        $conn->getDoctrineSchemaManager()->getDatabasePlatform()->registerDoctrineTypeMapping('enum', 'string');
-        $conn->getDoctrineSchemaManager()->getDatabasePlatform()->registerDoctrineTypeMapping('jsonb', 'json');
+        // Get the schema builder
+        $schema = $connection->getSchemaBuilder();
 
-        return $conn;
+        // Register custom type mappings if needed
+        // Note: This may need to be handled differently since Doctrine DBAL is gone
+        if (method_exists($schema, 'registerCustomDoctrineType')) {
+            $schema->registerCustomDoctrineType('enum', 'string');
+            $schema->registerCustomDoctrineType('jsonb', 'json'); 
+        }
+
+        return $connection;
     }
 
     /**
