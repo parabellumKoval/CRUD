@@ -87,6 +87,20 @@ class CrudTraitFakeFieldsTest extends BaseCrudTraitTest
         $this->assertEquals($this->extras_translatable[$this->locale]['extras_translatable_second'], $this->model->extras_translatable_second);
     }
 
+    public function testTranslatableFakeFieldsDecodeWhenStoredAsArray()
+    {
+        $model = new FakeColumnsModel();
+
+        foreach ($this->extras_translatable as $locale => $translation) {
+            $model->setTranslation('extras_translatable', $locale, $translation);
+        }
+
+        $model->withFakes(['extras_translatable']);
+
+        $this->assertEquals($this->extras_translatable[$this->locale]['extras_translatable_first'], $model->extras_translatable_first);
+        $this->assertEquals($this->extras_translatable[$this->locale]['extras_translatable_second'], $model->extras_translatable_second);
+    }
+
     public function testFakeObjectGetsFaked()
     {
         $this->assertEquals($this->fake_object, $this->model->fake_object);

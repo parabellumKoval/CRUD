@@ -67,7 +67,16 @@ trait HasFakeFields
      */
     public function shouldDecodeFake($column)
     {
-        return ! in_array($column, array_keys($this->casts));
+        $casts = method_exists($this, 'getCastedAttributes')
+            ? $this->getCastedAttributes()
+            : (array) $this->casts;
+
+        if (method_exists($this, 'getTranslatableAttributes')
+            && in_array($column, $this->getTranslatableAttributes(), true)) {
+            return true;
+        }
+
+        return ! array_key_exists($column, $casts);
     }
 
     /**
