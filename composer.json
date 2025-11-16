@@ -1,6 +1,5 @@
 {
     "name": "parabellumkoval/crud",
-    "version": "dev-store",
     "type": "library",
     "description": "Quickly build an admin interfaces using Laravel, CoreUI, Bootstrap and jQuery.",
     "keywords": [
