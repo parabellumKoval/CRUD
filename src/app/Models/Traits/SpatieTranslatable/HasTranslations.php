@@ -71,8 +71,9 @@ trait HasTranslations
      */
     public static function create(array $attributes = [])
     {
-        $locale = $attributes['locale'] ?? \App::getLocale();
-        $attributes = Arr::except($attributes, ['locale']);
+        $localeAttributeName = backpack_translatable_input_name();
+        $locale = $attributes[$localeAttributeName] ?? $attributes['locale'] ?? \App::getLocale();
+        $attributes = Arr::except($attributes, [$localeAttributeName, 'locale']);
         $non_translatable = [];
 
         $model = new static();
@@ -103,8 +104,9 @@ trait HasTranslations
             return false;
         }
 
-        $locale = $attributes['locale'] ?? \App::getLocale();
-        $attributes = Arr::except($attributes, ['locale']);
+        $localeAttributeName = backpack_translatable_input_name();
+        $locale = $attributes[$localeAttributeName] ?? $attributes['locale'] ?? \App::getLocale();
+        $attributes = Arr::except($attributes, [$localeAttributeName, 'locale']);
         $non_translatable = [];
 
         // do the actual saving
@@ -168,7 +170,7 @@ trait HasTranslations
             return $this->locale;
         }
 
-        return \Request::input('locale', \App::getLocale());
+        return backpack_translatable_request_locale(\App::getLocale());
     }
 
     /**
@@ -188,7 +190,7 @@ trait HasTranslations
             case 'findBySlug':
             case 'findBySlugOrFail':
 
-                $translation_locale = \Request::input('locale', \App::getLocale());
+                $translation_locale = backpack_translatable_request_locale(\App::getLocale());
 
                 if ($translation_locale) {
                     $item = parent::__call($method, $parameters);

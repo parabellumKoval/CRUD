@@ -35,14 +35,21 @@
 				<div class="col-md-12 mb-2">
 					<!-- Change translation button group -->
 					<div class="btn-group float-right">
-					<button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-						{{trans('backpack::crud.language')}}: {{ $crud->model->getAvailableLocales()[request()->input('locale')?request()->input('locale'):App::getLocale()] }} &nbsp; <span class="caret"></span>
-					</button>
-					<ul class="dropdown-menu">
-						@foreach ($crud->model->getAvailableLocales() as $key => $locale)
-							<a class="dropdown-item" href="{{ url($crud->route.'/'.$entry->getKey().'/show') }}?locale={{ $key }}">{{ $locale }}</a>
-						@endforeach
-					</ul>
+						@php
+						    $translatableInputName = backpack_translatable_input_name();
+						    $selectedLocale = request()->input($translatableInputName) ?? App::getLocale();
+						@endphp
+						<button type="button" class="btn btn-sm btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							{{trans('backpack::crud.language')}}: {{ $crud->model->getAvailableLocales()[$selectedLocale] ?? $selectedLocale }} &nbsp; <span class="caret"></span>
+						</button>
+						<ul class="dropdown-menu">
+							@foreach ($crud->model->getAvailableLocales() as $key => $locale)
+								@php
+									$query = http_build_query([$translatableInputName => $key]);
+								@endphp
+								<a class="dropdown-item" href="{{ url($crud->route.'/'.$entry->getKey().'/show').'?'.$query }}">{{ $locale }}</a>
+							@endforeach
+						</ul>
 					</div>
 				</div>
 			</div>

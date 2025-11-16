@@ -387,8 +387,9 @@ trait SaveActions
                 'redirect' => function ($crud, $request, $itemId = null) {
                     $itemId = $itemId ?: $request->input('id');
                     $redirectUrl = $crud->route.'/'.$itemId.'/edit';
-                    if ($request->has('locale')) {
-                        $redirectUrl .= '?locale='.$request->input('locale');
+                    $translationInputName = backpack_translatable_input_name();
+                    if ($request->has($translationInputName)) {
+                        $redirectUrl .= '?'.$translationInputName.'='.$request->input($translationInputName);
                     }
                     if ($request->has('current_tab')) {
                         $redirectUrl = $redirectUrl.'#'.$request->get('current_tab');

@@ -39,10 +39,11 @@ trait UpdateOperation
             $this->crud->loadDefaultOperationSettingsFromConfig();
 
             if ($this->crud->getModel()->translationEnabled()) {
+                $translatableInputName = backpack_translatable_input_name();
                 $this->crud->addField([
-                    'name' => 'locale',
+                    'name' => $translatableInputName,
                     'type' => 'hidden',
-                    'value' => request()->input('locale') ?? app()->getLocale(),
+                    'value' => request()->input($translatableInputName) ?? app()->getLocale(),
                 ]);
             }
 

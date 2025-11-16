@@ -217,6 +217,42 @@ if (! function_exists('backpack_view')) {
     }
 }
 
+if (! function_exists('backpack_translatable_input_name')) {
+    /**
+     * Returns the request input name used to determine the CRUD translation locale.
+     *
+     * @return string
+     */
+    function backpack_translatable_input_name()
+    {
+        return config('backpack.crud.translatable_input_name', 'translatable_locale');
+    }
+}
+
+if (! function_exists('backpack_translatable_request_locale')) {
+    /**
+     * Convenience helper to fetch the currently requested translation locale.
+     *
+     * @param  mixed  $default
+     * @return mixed
+     */
+    function backpack_translatable_request_locale($default = null)
+    {
+        if (! app()->bound('request')) {
+            return $default;
+        }
+
+        $inputName = backpack_translatable_input_name();
+        $value = request()->input($inputName);
+
+        if (is_null($value) && $inputName !== 'locale') {
+            $value = request()->input('locale');
+        }
+
+        return $value ?? $default;
+    }
+}
+
 if (! function_exists('square_brackets_to_dots')) {
     /**
      * Turns a string from bracket-type array to dot-notation array.

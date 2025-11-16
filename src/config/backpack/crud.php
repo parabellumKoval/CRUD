@@ -165,6 +165,9 @@ return [
     'show_translatable_field_icon'     => true,
     'translatable_field_icon_position' => 'right', // left or right
 
+    // Query parameter / input name used to switch translation locale within CRUD forms.
+    'translatable_input_name' => 'translatable_locale',
+
     'locales' => [
         // "af_NA" => "Afrikaans (Namibia)",
         // "af_ZA" => "Afrikaans (South Africa)",
