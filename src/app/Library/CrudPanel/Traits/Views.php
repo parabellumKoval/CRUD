@@ -242,6 +242,40 @@ trait Views
         return $this->get('reorder.contentClass') ?? config('backpack.crud.operations.reorder.contentClass', 'col-md-8 col-md-offset-2');
     }
 
+    /**
+     * Sets the service template.
+     *
+     * @param  string  $view
+     */
+    public function setServiceView($view)
+    {
+        return $this->set('service.view', $view);
+    }
+
+    /**
+     * Gets the service template.
+     */
+    public function getServiceView()
+    {
+        return $this->get('service.view') ?? 'crud::service';
+    }
+
+    /**
+     * Sets the service content class.
+     */
+    public function setServiceContentClass(string $class)
+    {
+        return $this->set('service.contentClass', $class);
+    }
+
+    /**
+     * Gets the service content class.
+     */
+    public function getServiceContentClass()
+    {
+        return $this->get('service.contentClass') ?? config('backpack.crud.operations.service.contentClass', 'col-md-10 col-md-offset-1');
+    }
+
     // -------
     // ALIASES
     // -------

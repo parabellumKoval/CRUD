@@ -1,0 +1,62 @@
+# ServiceOperation
+
+`ServiceOperation` добавляет к CRUD новый режим обслуживания записи. Отображается отдельная страница `/admin/{entity}/{id}/service` c пользовательскими инструментами (первый встроенный инструмент — слияние записей).
+
+## Как включить
+1. Подключите трейт в CrudController: `use \Backpack\CRUD\app\Http\Controllers\Operations\ServiceOperation;`.
+2. Обновите маршруты (в `routes/backpack/custom.php`) вызовом `$this->crud->setupRoutes()` как и для остальных операций — ничего дополнительно не требуется.
+3. На странице списка появится кнопка «Обслуживание». Точка входа рендерится шаблоном `crud::service`; при необходимости можно переопределить его методом `$this->crud->setServiceView()`.
+
+## Конфигурация модели
+Модель должна вернуть описание полей и правил слияния. Достаточно реализовать метод `getServiceMergeConfiguration()`:
+
+```php
+public function getServiceMergeConfiguration(): array
+{
+    return [
+        'label' => 'Слияние записей',
+        'description' => 'Описание инструмента',
+        'delete_source_default' => true, // удалять ли исходную запись после слияния
+        'candidate_limit' => 25,        // лимит записей в ajax‑поиске
+        'candidate_search' => ['title', 'slug'], // поля для поиска
+        'candidate_label' => '#%id% — %label%',  // формат отображения результата
+        'candidate_query' => function (Builder $query, ?Model $source) {
+            return $query->where('status', '!=', 'ARCHIVED');
+        },
+        'fields' => [
+            'title' => [
+                'label' => 'Заголовок',
+                'strategy' => 'translations', // translations | append | replace
+                'default' => true,            // отмечено сразу после открытия
+                'force' => false,             // по умолчанию включать переключатель Force
+                'help' => 'Дополняет переводы отсутствующими значениями',
+            ],
+            'countries' => [
+                'strategy' => 'append',
+                'label' => 'Страны',
+            ],
+            'content' => [
+                'handler' => 'mergeContentFromServiceOperation', // метод модели
+                'label' => 'Контент',
+            ],
+        ],
+    ];
+}
+```
+
+### Стратегии
+- `translations` — берёт переводы из источника и дополняет/заменяет переводы целевой записи. При выключенном `Force` заполняются только пустые локали; при включенном — значения перезаписываются.
+- `append` — складывает числовые значения, конкатенирует строки, объединяет массивы (ассоциативные ключи дополняются, списки объединяются без дубликатов). Переключатель `Force` заставляет перезаписывать конфликтующие ключи.
+- `replace` — жёсткая замена значения. `Force` отвечает за перезапись непустых значений (по умолчанию замена выполняется только если в целевой записи пусто).
+
+### Кастомные обработчики
+Укажите `handler` (строку с именем метода модели или callable). Метод получит `$target`, `$source` и массив `$payload` (`field`, `force`, `definition`). Внутри можно реализовать любую доменную логику и сохранить модель вручную — операция всё равно завершится в одной транзакции.
+
+### Ajax‑список
+Select2 на странице обслуживания использует GET `/service/merge-candidates`.
+- `source_id` — идентификатор «текущей» записи (исключается из результатов).
+- `q` — поисковая строка.
+- `selected` — id/массив id, чтобы восстановить выбранное значение после ошибок валидации.
+
+### Layout
+Размер контейнера настраивается через `$this->crud->setServiceContentClass()` или конфиг `backpack.crud.operations.service.contentClass`. Стандартный Blade шаблон (`resources/views/vendor/backpack/crud/service.blade.php`) можно переопределить publish'ем.
