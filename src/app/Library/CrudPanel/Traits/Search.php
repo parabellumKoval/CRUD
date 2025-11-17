@@ -247,7 +247,9 @@ trait Search
      */
     public function getCellView($column, $entry, $rowNumber = false)
     {
-        return $this->renderCellView($this->getCellViewName($column), $column, $entry, $rowNumber);
+        $html = $this->renderCellView($this->getCellViewName($column), $column, $entry, $rowNumber);
+
+        return $this->maybeWrapTranslatableColumnValue($html, $column, $entry);
     }
 
     /**
@@ -335,5 +337,34 @@ trait Search
     public function getColumnWithTableNamePrefixed($query, $column)
     {
         return $query->getModel()->getTable().'.'.$column;
+    }
+
+    /**
+     * Wrap column HTML in a span when it uses a fallback/alternate translation.
+     *
+     * @param  string  $html
+     * @param  array  $column
+     * @param  \Illuminate\Database\Eloquent\Model  $entry
+     * @return string
+     */
+    protected function maybeWrapTranslatableColumnValue($html, $column, $entry)
+    {
+        if (! is_string($html) || $html === '') {
+            return $html;
+        }
+
+        if (! is_array($column) || ! function_exists('backpack_translatable_component_uses_alternative_locale')) {
+            return $html;
+        }
+
+        if (! backpack_translatable_component_uses_alternative_locale($column, $this, $entry)) {
+            return $html;
+        }
+
+        if (strpos($html, 'bp-translatable-alt-value') !== false) {
+            return $html;
+        }
+
+        return '<span class="bp-translatable-alt-value">'.$html.'</span>';
     }
 }

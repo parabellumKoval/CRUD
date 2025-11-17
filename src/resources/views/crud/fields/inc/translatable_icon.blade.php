@@ -1,50 +1,9 @@
 @php
-    $modelInstance = $entry ?? $crud->entry ?? $crud->model;
-    $translatable = false;
-    $translatableAttribute = null;
-    $localeStates = [];
-    $availableLocales = [];
-
-    if ($modelInstance) {
-        $translationFeatureEnabled = method_exists($modelInstance, 'translationEnabled')
-            ? $modelInstance->translationEnabled()
-            : false;
-
-        foreach ((array) $field['name'] as $fieldName) {
-            if ($translationFeatureEnabled
-                && method_exists($modelInstance, 'isTranslatableAttribute')
-                && $modelInstance->isTranslatableAttribute($fieldName)) {
-                $translatable = true;
-                $translatableAttribute = $fieldName;
-                break;
-            }
-
-            if (method_exists($modelInstance, 'isAdditionalTranslatableAttribute')
-                && $modelInstance->isAdditionalTranslatableAttribute($fieldName)) {
-                $translatable = true;
-                $translatableAttribute = $fieldName;
-                break;
-            }
-        }
-
-        if (! $translatableAttribute && $translationFeatureEnabled && isset($field['store_in'])
-            && method_exists($modelInstance, 'isTranslatableAttribute')
-            && $modelInstance->isTranslatableAttribute($field['store_in'])) {
-            $translatable = true;
-            $translatableAttribute = $field['store_in'];
-        }
-
-        if ($translatable && method_exists($modelInstance, 'getTranslationLocalesState')) {
-            $localeStates = $modelInstance->getTranslationLocalesState($translatableAttribute);
-        }
-
-        if (method_exists($modelInstance, 'getAvailableLocales')) {
-            $availableLocales = (array) $modelInstance->getAvailableLocales();
-        } else {
-            $availableLocales = (array) config('backpack.crud.locales', []);
-        }
-    }
-
+    $translatableContext = backpack_translatable_component_context($field, $crud, $entry ?? null);
+    $translatable = $translatableContext['is_translatable'];
+    $translatableAttribute = $translatableContext['attribute'];
+    $localeStates = $translatableContext['locale_states'];
+    $availableLocales = $translatableContext['available_locales'];
     $iconPosition = config('backpack.crud.translatable_field_icon_position', 'right');
 @endphp
 @if ($translatable && config('backpack.crud.show_translatable_field_icon'))

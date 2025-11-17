@@ -1,4 +1,6 @@
 @php
+    $shouldDimTranslatableValue = backpack_translatable_component_uses_alternative_locale($field, $crud, $entry ?? null);
+
 	$field['wrapper'] = $field['wrapper'] ?? $field['wrapperAttributes'] ?? [];
 
     // each wrapper attribute can be a callback or a string
@@ -15,6 +17,9 @@
 	
 	$field['wrapper']['class'] = $field['wrapper']['class'] ?? "form-group col-sm-12";
 	$field['wrapper']['class'] = $field['wrapper']['class'].$required;
+    if ($shouldDimTranslatableValue) {
+        $field['wrapper']['class'] = trim($field['wrapper']['class'].' bp-translatable-alt-field');
+    }
 	$field['wrapper']['element'] = $field['wrapper']['element'] ?? 'div';
 @endphp
 

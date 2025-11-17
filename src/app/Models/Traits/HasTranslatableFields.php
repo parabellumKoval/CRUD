@@ -2,8 +2,8 @@
 
 namespace Backpack\CRUD\app\Models\Traits;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Spatie\Translatable\Translatable;
 
 /*
 |--------------------------------------------------------------------------
@@ -195,5 +195,116 @@ trait HasTranslatableFields
         return function_exists('mb_strlen')
             ? mb_strlen($value)
             : strlen($value);
+    }
+
+    /**
+     * Fetch translation origin data (requested vs resolved locale) for an attribute.
+     */
+    public function getTranslationValueOrigin(?string $attribute, ?string $requestedLocale = null): ?array
+    {
+        if (! $attribute) {
+            return null;
+        }
+
+        if (! method_exists($this, 'translationEnabled') || ! $this->translationEnabled()) {
+            return null;
+        }
+
+        if (! method_exists($this, 'isTranslatableAttribute') || ! $this->isTranslatableAttribute($attribute)) {
+            return null;
+        }
+
+        if (! method_exists($this, 'normalizeLocale')) {
+            return null;
+        }
+
+        $requestedLocale = $this->normalizeRequestedTranslationLocale($requestedLocale);
+
+        if (! $requestedLocale) {
+            return null;
+        }
+
+        $resolvedLocale = $this->normalizeLocale($attribute, $requestedLocale, true);
+        $type = $this->determineTranslationValueOriginType($attribute, $requestedLocale, $resolvedLocale);
+
+        return [
+            'requested_locale' => $requestedLocale,
+            'resolved_locale' => $resolvedLocale,
+            'type' => $type,
+        ];
+    }
+
+    /**
+     * Determine if translation value should be dimmed (fallback or alternate locale).
+     */
+    public function translationValueShouldBeDimmed(?string $attribute, ?string $requestedLocale = null): bool
+    {
+        $origin = $this->getTranslationValueOrigin($attribute, $requestedLocale);
+
+        if (! $origin) {
+            return false;
+        }
+
+        return in_array($origin['type'], ['fallback', 'alternate'], true);
+    }
+
+    protected function determineTranslationValueOriginType(string $attribute, string $requestedLocale, string $resolvedLocale): string
+    {
+        if ($requestedLocale === $resolvedLocale) {
+            return 'requested';
+        }
+
+        $fallbackLocale = $this->resolveFallbackLocale();
+
+        if ($fallbackLocale && $resolvedLocale === $fallbackLocale) {
+            return 'fallback';
+        }
+
+        return 'alternate';
+    }
+
+    protected function resolveFallbackLocale(): ?string
+    {
+        if (method_exists($this, 'getFallbackLocale')) {
+            $fallbackLocale = $this->getFallbackLocale();
+
+            if (is_string($fallbackLocale) && $fallbackLocale !== '') {
+                return $fallbackLocale;
+            }
+        }
+
+        if (app()->bound(Translatable::class)) {
+            /** @var \Spatie\Translatable\Translatable $config */
+            $config = app(Translatable::class);
+
+            if (! empty($config->fallbackLocale)) {
+                return $config->fallbackLocale;
+            }
+        }
+
+        $appFallback = config('app.fallback_locale');
+
+        return is_string($appFallback) && $appFallback !== '' ? $appFallback : null;
+    }
+
+    protected function normalizeRequestedTranslationLocale(?string $requestedLocale): ?string
+    {
+        if ($requestedLocale !== null) {
+            $requestedLocale = trim((string) $requestedLocale);
+        } else {
+            $requestedLocale = backpack_translatable_request_locale(app()->getLocale());
+        }
+
+        if (! is_string($requestedLocale)) {
+            return null;
+        }
+
+        $requestedLocale = trim($requestedLocale);
+
+        if ($requestedLocale === '') {
+            return null;
+        }
+
+        return $requestedLocale;
     }
 }

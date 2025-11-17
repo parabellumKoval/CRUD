@@ -253,6 +253,130 @@ if (! function_exists('backpack_translatable_request_locale')) {
     }
 }
 
+if (! function_exists('backpack_translatable_component_context')) {
+    /**
+     * Resolve translation context for a CRUD component (field or column).
+     *
+     * @param  array  $component
+     * @param  mixed  $crud
+     * @param  \Illuminate\Database\Eloquent\Model|null  $entry
+     * @return array{
+     *     model: mixed,
+     *     attribute: string|null,
+     *     is_translatable: bool,
+     *     is_additional: bool,
+     *     locale_states: array,
+     *     available_locales: array
+     * }
+     */
+    function backpack_translatable_component_context(array $component, $crud = null, $entry = null): array
+    {
+        $modelInstance = $entry ?? ($crud->entry ?? ($crud->model ?? null));
+
+        $context = [
+            'model' => $modelInstance,
+            'attribute' => null,
+            'is_translatable' => false,
+            'is_additional' => false,
+            'locale_states' => [],
+            'available_locales' => [],
+        ];
+
+        if (! $modelInstance) {
+            return $context;
+        }
+
+        $translationFeatureEnabled = method_exists($modelInstance, 'translationEnabled')
+            ? (bool) $modelInstance->translationEnabled()
+            : false;
+
+        $rawNames = $component['name'] ?? null;
+        $names = [];
+
+        if (is_array($rawNames)) {
+            $names = $rawNames;
+        } elseif (! is_null($rawNames)) {
+            $names = [$rawNames];
+        }
+
+        $names = array_filter(array_map(function ($value) {
+            if (! is_string($value)) {
+                return null;
+            }
+
+            $value = trim($value);
+
+            return $value === '' ? null : $value;
+        }, $names));
+
+        foreach ($names as $name) {
+            if ($translationFeatureEnabled
+                && method_exists($modelInstance, 'isTranslatableAttribute')
+                && $modelInstance->isTranslatableAttribute($name)) {
+                $context['attribute'] = $name;
+                $context['is_translatable'] = true;
+                break;
+            }
+
+            if (method_exists($modelInstance, 'isAdditionalTranslatableAttribute')
+                && $modelInstance->isAdditionalTranslatableAttribute($name)) {
+                $context['attribute'] = $name;
+                $context['is_translatable'] = true;
+                $context['is_additional'] = true;
+                break;
+            }
+        }
+
+        if (! $context['attribute']
+            && $translationFeatureEnabled
+            && isset($component['store_in'])
+            && is_string($component['store_in'])
+            && method_exists($modelInstance, 'isTranslatableAttribute')
+            && $modelInstance->isTranslatableAttribute($component['store_in'])) {
+            $context['attribute'] = $component['store_in'];
+            $context['is_translatable'] = true;
+        }
+
+        if ($context['attribute'] && method_exists($modelInstance, 'getTranslationLocalesState')) {
+            $context['locale_states'] = $modelInstance->getTranslationLocalesState($context['attribute']);
+        }
+
+        if (method_exists($modelInstance, 'getAvailableLocales')) {
+            $context['available_locales'] = (array) $modelInstance->getAvailableLocales();
+        } else {
+            $context['available_locales'] = (array) config('backpack.crud.locales', []);
+        }
+
+        return $context;
+    }
+}
+
+if (! function_exists('backpack_translatable_component_uses_alternative_locale')) {
+    /**
+     * Determine if a component is showing a translation from a fallback/alternative locale.
+     *
+     * @param  array  $component
+     * @param  mixed  $crud
+     * @param  \Illuminate\Database\Eloquent\Model|null  $entry
+     */
+    function backpack_translatable_component_uses_alternative_locale(array $component, $crud = null, $entry = null): bool
+    {
+        $context = backpack_translatable_component_context($component, $crud, $entry);
+        $model = $context['model'] ?? null;
+        $attribute = $context['attribute'] ?? null;
+
+        if (! $context['is_translatable'] || ! $model || ! is_string($attribute)) {
+            return false;
+        }
+
+        if (! method_exists($model, 'translationValueShouldBeDimmed')) {
+            return false;
+        }
+
+        return $model->translationValueShouldBeDimmed($attribute);
+    }
+}
+
 if (! function_exists('square_brackets_to_dots')) {
     /**
      * Turns a string from bracket-type array to dot-notation array.

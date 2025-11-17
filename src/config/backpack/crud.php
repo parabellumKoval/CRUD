@@ -168,6 +168,14 @@ return [
     // Query parameter / input name used to switch translation locale within CRUD forms.
     'translatable_input_name' => 'translatable_locale',
 
+    // When set to true Backpack will use the first available (non-empty) translation
+    // whenever both the requested and fallback locales are empty. Use null to keep
+    // Spatie's default behaviour or false to explicitly disable the behaviour.
+    'translatable_fallback_any_locale' => null,
+
+    // Color used for translatable values that come from fallback / alternative locales.
+    'translatable_alternative_value_color' => '#999999',
+
     'locales' => [
         // "af_NA" => "Afrikaans (Namibia)",
         // "af_ZA" => "Afrikaans (South Africa)",
