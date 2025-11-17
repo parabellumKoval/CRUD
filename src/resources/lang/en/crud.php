@@ -33,7 +33,6 @@ return [
     // Translatable models
     'edit_translations' => 'Translation',
     'language'          => 'Language',
-
     // CRUD table view
     'all'                       => 'All ',
     'in_the_database'           => 'in the database',
