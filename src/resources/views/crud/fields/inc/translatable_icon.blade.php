@@ -5,16 +5,31 @@
     $localeStates = [];
     $availableLocales = [];
 
-    if ($modelInstance && method_exists($modelInstance, 'translationEnabled') && $modelInstance->translationEnabled()) {
+    if ($modelInstance) {
+        $translationFeatureEnabled = method_exists($modelInstance, 'translationEnabled')
+            ? $modelInstance->translationEnabled()
+            : false;
+
         foreach ((array) $field['name'] as $fieldName) {
-            if ($modelInstance->isTranslatableAttribute($fieldName)) {
+            if ($translationFeatureEnabled
+                && method_exists($modelInstance, 'isTranslatableAttribute')
+                && $modelInstance->isTranslatableAttribute($fieldName)) {
+                $translatable = true;
+                $translatableAttribute = $fieldName;
+                break;
+            }
+
+            if (method_exists($modelInstance, 'isAdditionalTranslatableAttribute')
+                && $modelInstance->isAdditionalTranslatableAttribute($fieldName)) {
                 $translatable = true;
                 $translatableAttribute = $fieldName;
                 break;
             }
         }
 
-        if (! $translatableAttribute && isset($field['store_in']) && $modelInstance->isTranslatableAttribute($field['store_in'])) {
+        if (! $translatableAttribute && $translationFeatureEnabled && isset($field['store_in'])
+            && method_exists($modelInstance, 'isTranslatableAttribute')
+            && $modelInstance->isTranslatableAttribute($field['store_in'])) {
             $translatable = true;
             $translatableAttribute = $field['store_in'];
         }
@@ -35,14 +50,12 @@
 @if ($translatable && config('backpack.crud.show_translatable_field_icon'))
     <span class="translatable-indicator pull-{{ $iconPosition }} d-inline-flex align-items-center flex-wrap" style="gap:4px;margin-top:3px;">
         <i class="la la-flag-checkered" title="This field is translatable{{ $translatableAttribute ? ' ('.$translatableAttribute.')' : '' }}."></i>
-        @if (!empty($availableLocales))
+        @if (!empty($localeStates))
             <span class="translatable-indicator__locales d-inline-flex flex-wrap" style="gap:2px;">
-                @foreach ($availableLocales as $localeKey => $label)
+                @foreach ($localeStates as $localeCode => $state)
                     @php
-                        $localeCode = is_string($localeKey) ? $localeKey : $label;
-                        $state = $localeStates[$localeCode] ?? ['filled' => false, 'length' => 0];
                         $badgeClass = $state['filled'] ? 'badge-success' : 'badge-secondary';
-                        $localeLabel = is_string($label) && ! is_int($localeKey) ? $label : strtoupper($localeCode);
+                        $localeLabel = $availableLocales[$localeCode] ?? strtoupper($localeCode);
                         $tooltipText = strtoupper($localeCode).' · '.($state['filled'] ? __('Translation available') : __('No translation')).' ('.$state['length'].')';
                     @endphp
                     <span class="badge {{ $badgeClass }} badge-pill text-uppercase small" title="{{ $tooltipText }}">

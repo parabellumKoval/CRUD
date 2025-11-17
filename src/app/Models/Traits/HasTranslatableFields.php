@@ -3,6 +3,7 @@
 namespace Backpack\CRUD\app\Models\Traits;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,7 +47,27 @@ trait HasTranslatableFields
      */
     public function getTranslationLocalesState(?string $attribute): array
     {
-        if (! $attribute || ! $this->translationEnabled() || ! $this->isTranslatableAttribute($attribute)) {
+        if (! $attribute) {
+            return [];
+        }
+
+        $attribute = (string) $attribute;
+        $supportsStandard = $this->translationEnabled()
+            && method_exists($this, 'isTranslatableAttribute')
+            && $this->isTranslatableAttribute($attribute);
+        $supportsAdditional = $this->isAdditionalTranslatableAttribute($attribute);
+
+        if (! $supportsStandard && ! $supportsAdditional) {
+            return [];
+        }
+
+        if ($method = $this->resolveCustomTranslationStateMethod($attribute)) {
+            $result = $this->{$method}();
+
+            return is_array($result) ? $result : [];
+        }
+
+        if (! $supportsStandard) {
             return [];
         }
 
@@ -71,6 +92,18 @@ trait HasTranslatableFields
     }
 
     /**
+     * Determine if attribute is part of additional translatable set.
+     */
+    public function isAdditionalTranslatableAttribute(?string $attribute): bool
+    {
+        if (! $attribute) {
+            return false;
+        }
+
+        return in_array($attribute, $this->getAdditionalTranslatableAttributes(), true);
+    }
+
+    /**
      * @return array<int, string>
      */
     protected function getTranslatableLocaleKeys(): array
@@ -90,6 +123,33 @@ trait HasTranslatableFields
         }
 
         return [app()->getLocale()];
+    }
+
+    /**
+     * Resolve method that provides translation state for a custom attribute.
+     */
+    protected function resolveCustomTranslationStateMethod(string $attribute): ?string
+    {
+        $method = 'get'.Str::studly($attribute).'TranslationLocalesState';
+
+        return method_exists($this, $method) ? $method : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getAdditionalTranslatableAttributes(): array
+    {
+        if (! property_exists($this, 'additional_translatable')) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(function ($attribute) {
+                return is_string($attribute) ? trim($attribute) : null;
+            }, (array) $this->additional_translatable),
+            fn ($attribute) => is_string($attribute) && $attribute !== ''
+        ));
     }
 
     /**
