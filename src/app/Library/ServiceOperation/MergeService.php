@@ -31,12 +31,18 @@ class MergeService
      */
     protected array $fieldDefinitions = [];
 
+    /**
+     * @var array<string, array<string, mixed>>
+     */
+    protected array $relationDefinitions = [];
+
     public function __construct(CrudPanel $crud, ?Model $sourceEntry = null)
     {
         $this->crud = $crud;
         $this->sourceEntry = $sourceEntry;
         $this->definition = $this->resolveDefinition();
         $this->fieldDefinitions = $this->definition['fields'];
+        $this->relationDefinitions = $this->definition['relations'];
     }
 
     public function getDefinition(): array
@@ -53,11 +59,27 @@ class MergeService
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getRelations(): array
+    {
+        return array_values($this->relationDefinitions);
+    }
+
+    /**
      * @return array<string>
      */
     public function getFieldKeys(): array
     {
         return array_keys($this->fieldDefinitions);
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getRelationDefaults(): array
+    {
+        return $this->definition['relation_defaults'] ?? [];
     }
 
     public function shouldDeleteSourceByDefault(): bool
@@ -137,7 +159,7 @@ class MergeService
     /**
      * Merge $this->sourceEntry into $targetEntry using provided configuration.
      */
-    public function mergeInto(Model $targetEntry, array $selectedFields, array $forcedFields, bool $deleteSource): array
+    public function mergeInto(Model $targetEntry, array $selectedFields, array $forcedFields, bool $deleteSource, array $relationKeys = []): array
     {
         if (! $this->sourceEntry) {
             throw new InvalidArgumentException('Источник слияния не определён.');
@@ -155,7 +177,7 @@ class MergeService
 
         $forceMap = array_flip($forcedFields);
 
-        DB::transaction(function () use ($targetEntry, $selected, $forceMap, $deleteSource) {
+        DB::transaction(function () use ($targetEntry, $selected, $forceMap, $deleteSource, $relationKeys) {
             foreach ($selected as $fieldName) {
                 $definition = $this->fieldDefinitions[$fieldName] ?? null;
 
@@ -168,6 +190,10 @@ class MergeService
             }
 
             $targetEntry->save();
+
+            if ($relationKeys !== []) {
+                $this->mergeSelectedRelations($targetEntry, $this->sourceEntry, $relationKeys);
+            }
 
             if ($deleteSource) {
                 $this->sourceEntry->delete();
@@ -206,6 +232,156 @@ class MergeService
         }
 
         $this->mergeReplace($target, $source, $field, $force);
+    }
+
+    protected function mergeSelectedRelations(Model $target, Model $source, array $relationKeys): void
+    {
+        $unique = array_values(array_intersect(array_unique($relationKeys), array_keys($this->relationDefinitions)));
+
+        foreach ($unique as $relationKey) {
+            $definition = $this->relationDefinitions[$relationKey] ?? null;
+
+            if (! $definition) {
+                continue;
+            }
+
+            $this->applyRelationMerge($target, $source, $definition);
+        }
+    }
+
+    protected function applyRelationMerge(Model $target, Model $source, array $definition): void
+    {
+        $handler = $definition['handler'];
+
+        if ($handler) {
+            $this->callRelationHandler($target, $source, $handler, $definition);
+
+            return;
+        }
+
+        $type = $definition['type'] ?? 'table';
+
+        if ($type === 'table') {
+            $this->reassignTableRelation($target, $source, $definition);
+        }
+    }
+
+    protected function reassignTableRelation(Model $target, Model $source, array $definition): void
+    {
+        $table = $definition['table'] ?? null;
+
+        if (! $table) {
+            return;
+        }
+
+        $column = $definition['column'] ?? $source->getForeignKey();
+        $sourceId = $source->getKey();
+        $targetId = $target->getKey();
+
+        if ($sourceId === null || $targetId === null) {
+            return;
+        }
+
+        $query = DB::table($table)->where($column, $sourceId);
+        $this->applyRelationConstraints($query, $definition);
+
+        $affected = $query->update([$column => $targetId]);
+
+        if (! $affected) {
+            return;
+        }
+
+        $uniqueColumns = $definition['unique'] ?? [];
+
+        if ($uniqueColumns === []) {
+            return;
+        }
+
+        $this->deduplicateTableRelations($table, $column, $targetId, $uniqueColumns, $definition);
+    }
+
+    protected function deduplicateTableRelations(string $table, string $column, $targetId, array $uniqueColumns, array $definition): void
+    {
+        $primaryKey = $definition['primary_key'] ?? 'id';
+        $groupColumns = array_merge([$column], $uniqueColumns);
+
+        $duplicatesQuery = DB::table($table)
+            ->select(array_merge($groupColumns, [DB::raw('COUNT(*) as aggregate')]))
+            ->where($column, $targetId);
+
+        $this->applyRelationConstraints($duplicatesQuery, $definition);
+
+        $duplicates = $duplicatesQuery
+            ->groupBy($groupColumns)
+            ->having('aggregate', '>', 1)
+            ->get();
+
+        foreach ($duplicates as $duplicate) {
+            $idsQuery = DB::table($table)
+                ->select($primaryKey)
+                ->where($column, $targetId);
+
+            $this->applyRelationConstraints($idsQuery, $definition);
+
+            foreach ($uniqueColumns as $uniqueColumn) {
+                if (isset($duplicate->{$uniqueColumn})) {
+                    $idsQuery->where($uniqueColumn, $duplicate->{$uniqueColumn});
+                }
+            }
+
+            $ids = $idsQuery->orderBy($primaryKey)->pluck($primaryKey);
+
+            if ($ids->count() <= 1) {
+                continue;
+            }
+
+            $idsToDelete = $ids->slice(1)->all();
+
+            if ($idsToDelete !== []) {
+                DB::table($table)->whereIn($primaryKey, $idsToDelete)->delete();
+            }
+        }
+    }
+
+    protected function applyRelationConstraints($query, array $definition): void
+    {
+        $constraints = $definition['constraints'] ?? [];
+
+        foreach ($constraints as $constraint) {
+            if (is_callable($constraint)) {
+                $constraint($query);
+                continue;
+            }
+
+            if (is_array($constraint) && isset($constraint['column'])) {
+                $operator = $constraint['operator'] ?? '=';
+                $value = $constraint['value'] ?? null;
+
+                if ($operator === 'in' && is_array($value)) {
+                    $query->whereIn($constraint['column'], $value);
+                } else {
+                    $query->where($constraint['column'], $operator, $value);
+                }
+            }
+        }
+    }
+
+    protected function callRelationHandler(Model $target, Model $source, $handler, array $definition): void
+    {
+        $payload = [
+            'relation' => $definition['key'],
+            'definition' => $definition,
+        ];
+
+        if (is_string($handler) && method_exists($target, $handler)) {
+            $target->{$handler}($source, $payload);
+
+            return;
+        }
+
+        if (is_callable($handler)) {
+            $handler($target, $source, $payload);
+        }
     }
 
     protected function mergeTranslations(Model $target, Model $source, string $attribute, bool $force): void
@@ -365,6 +541,18 @@ class MergeService
             }
         }
 
+        $relations = [];
+        $relationDefaults = [];
+
+        foreach ((array) ($definition['relations'] ?? []) as $relationKey => $config) {
+            $normalized = $this->normalizeRelationDefinition($relationKey, $config);
+            $relations[$normalized['key']] = $normalized;
+
+            if ($normalized['default']) {
+                $relationDefaults[] = $normalized['key'];
+            }
+        }
+
         $candidateQuery = $definition['candidate_query'] ?? null;
 
         return [
@@ -377,6 +565,46 @@ class MergeService
             'candidate_query' => $candidateQuery,
             'default_fields' => $defaultFields,
             'fields' => $fields,
+            'relations' => $relations,
+            'relation_defaults' => $relationDefaults,
+        ];
+    }
+
+    protected function normalizeRelationDefinition(string|int $name, $config): array
+    {
+        $key = is_string($name) ? trim($name) : '';
+
+        if ($key === '') {
+            $key = (string) ($config['name'] ?? '');
+        }
+
+        if ($key === '') {
+            throw new InvalidArgumentException('Связь слияния должна иметь имя.');
+        }
+
+        $label = $config['label'] ?? Str::title(str_replace('_', ' ', $key));
+        $type = $config['type'] ?? 'table';
+        $handler = $config['handler'] ?? null;
+        $default = (bool) ($config['default'] ?? false);
+        $help = $config['help'] ?? null;
+        $table = $config['table'] ?? null;
+        $column = $config['column'] ?? null;
+        $constraints = $this->normalizeConstraints($config['constraints'] ?? []);
+        $unique = $this->normalizeStringArray($config['unique'] ?? []);
+        $primaryKey = $config['primary_key'] ?? 'id';
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'type' => $type,
+            'handler' => $handler,
+            'default' => $default,
+            'help' => $help,
+            'table' => $table,
+            'column' => $column,
+            'constraints' => $constraints,
+            'unique' => $unique,
+            'primary_key' => $primaryKey,
         ];
     }
 
@@ -410,6 +638,67 @@ class MergeService
             'forceable' => $forceable,
             'help' => $help,
         ];
+    }
+
+    /**
+     * @param  array<int, string>|mixed  $values
+     * @return array<int, string>
+     */
+    protected function normalizeStringArray($values): array
+    {
+        if (! is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function ($value) {
+            if (! is_string($value)) {
+                return null;
+            }
+
+            $trimmed = trim($value);
+
+            return $trimmed === '' ? null : $trimmed;
+        }, $values)));
+    }
+
+    /**
+     * @param  array<int, mixed>|mixed  $constraints
+     * @return array<int, mixed>
+     */
+    protected function normalizeConstraints($constraints): array
+    {
+        if (! is_array($constraints)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function ($constraint) {
+            if (is_callable($constraint)) {
+                return $constraint;
+            }
+
+            if (is_array($constraint) && isset($constraint['column'])) {
+                $column = trim((string) $constraint['column']);
+
+                if ($column === '') {
+                    return null;
+                }
+
+                $operator = $constraint['operator'] ?? '=';
+                $value = $constraint['value'] ?? null;
+
+                if (is_string($operator)) {
+                    $operator = trim($operator);
+                }
+
+                return [
+                    'column' => $column,
+                    'operator' => $operator,
+                    'value' => $value,
+                ];
+            }
+
+            return null;
+        }, $constraints)));
     }
 
     protected function applyCandidateQuery(Builder $builder, ?Model $source): Builder

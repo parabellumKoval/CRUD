@@ -11,6 +11,9 @@
     $selectedFields = old('fields', $serviceMerge['default_fields'] ?? []);
     $forcedFields = old('force', collect($serviceMergeFields)->filter(fn ($field) => $field['force'])->pluck('key')->all());
     $deleteSource = old('delete_source', $serviceDeleteDefault ? 1 : 0);
+    $serviceRelations = $serviceRelations ?? [];
+    $relationDefaults = $serviceRelationsDefault ?? [];
+    $selectedRelations = old('relations', $relationDefaults);
     $strategyLabels = [
         'translations' => __('Переводы'),
         'append' => __('Добавление'),
@@ -68,6 +71,36 @@
                             {{ __('Удалить текущую запись после слияния') }}
                         </label>
                     </div>
+
+                    @if ($serviceRelations !== [])
+                        <hr>
+                        <div class="form-group mb-0">
+                            <label class="font-weight-bold d-block mb-2">{{ __('Связи для слияния') }}</label>
+                            <div class="list-group">
+                                @foreach ($serviceRelations as $relation)
+                                    @php
+                                        $relationChecked = in_array($relation['key'], (array) $selectedRelations, true);
+                                    @endphp
+                                    <div class="list-group-item">
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox"
+                                                   class="custom-control-input"
+                                                   id="merge-relation-{{ $relation['key'] }}"
+                                                   name="relations[]"
+                                                   value="{{ $relation['key'] }}"
+                                                   {{ $relationChecked ? 'checked' : '' }}>
+                                            <label class="custom-control-label font-weight-bold" for="merge-relation-{{ $relation['key'] }}">
+                                                {{ $relation['label'] }}
+                                            </label>
+                                        </div>
+                                        @if ($relation['help'])
+                                            <p class="text-muted small mb-0 mt-2">{{ $relation['help'] }}</p>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </div>
 

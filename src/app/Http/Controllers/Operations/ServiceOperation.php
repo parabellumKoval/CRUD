@@ -63,6 +63,8 @@ trait ServiceOperation
         $this->data['serviceMergeFields'] = $mergeService->getFields();
         $this->data['serviceDeleteDefault'] = $mergeService->shouldDeleteSourceByDefault();
         $this->data['serviceCandidatesEndpoint'] = $this->getServiceCandidatesEndpoint();
+        $this->data['serviceRelations'] = $mergeService->getRelations();
+        $this->data['serviceRelationsDefault'] = $mergeService->getRelationDefaults();
 
         $this->data['title'] = $this->crud->getTitle() ?? __('Режим обслуживания');
 
@@ -83,6 +85,8 @@ trait ServiceOperation
             'force' => ['array'],
             'force.*' => ['string'],
             'delete_source' => ['nullable', 'boolean'],
+            'relations' => ['array'],
+            'relations.*' => ['string'],
         ]);
 
         $targetId = (int) $validated['target_entry_id'];
@@ -100,10 +104,11 @@ trait ServiceOperation
         $mergeService = $this->makeMergeService($sourceEntry);
         $fields = array_map('strval', $validated['fields']);
         $forced = array_map('strval', $validated['force'] ?? []);
+        $relations = array_map('strval', $validated['relations'] ?? []);
         $deleteSource = (bool) ($validated['delete_source'] ?? false);
 
         try {
-            $result = $mergeService->mergeInto($targetEntry, $fields, $forced, $deleteSource);
+            $result = $mergeService->mergeInto($targetEntry, $fields, $forced, $deleteSource, $relations);
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['service_merge' => $e->getMessage()])->withInput();
         } catch (\Throwable $e) {
@@ -114,7 +119,7 @@ trait ServiceOperation
 
         \Alert::success(__('Слияние успешно выполнено.'))->flash();
 
-        return redirect()->to(url($this->crud->route.'/'.$result['target']->getKey().'/service'));
+        return redirect()->to(url($this->crud->route));
     }
 
     public function serviceMergeCandidates(Request $request)
