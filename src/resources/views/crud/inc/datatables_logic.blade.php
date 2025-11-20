@@ -409,7 +409,7 @@
       var spanTop = window.crud.resolveRowStackSpan('top');
       var spanBottom = window.crud.resolveRowStackSpan('bottom');
 
-      var buildRow = function (position, html) {
+      var buildRow = function (position, html, entryId) {
           var span = position === 'top' ? spanTop : spanBottom;
           if (!span) {
               span = { start: 0, end: totalColumns - 1 };
@@ -417,6 +417,10 @@
 
           var width = span.end - span.start + 1;
           var $row = $("<tr class='crud-row-stack crud-row-stack--"+position+"'></tr>");
+
+          if (entryId !== null && entryId !== undefined) {
+              $row.attr('data-row-stack-entry-id', entryId);
+          }
 
           if (position === 'top' && span.start > 0) {
               $row.append("<td class='crud-row-stack__gap' colspan='"+span.start+"'></td>");
@@ -470,12 +474,26 @@
       window.crud.table.rows({page:'current'}).every(function () {
           var rowData = this.data() || {};
           var $row = $(this.node());
+          var entryId = null;
+
+          if (typeof rowData.___id !== 'undefined' && rowData.___id !== null) {
+              entryId = rowData.___id;
+          } else if (typeof rowData.DT_RowId !== 'undefined' && rowData.DT_RowId !== null) {
+              entryId = rowData.DT_RowId;
+          }
+
+          if (entryId !== null && entryId !== undefined) {
+              $row.attr('data-row-stack-entry-id', entryId);
+          } else {
+              $row.removeAttr('data-row-stack-entry-id');
+          }
+
           var variant = $row.hasClass('even') ? 'even' : 'odd';
 
           applyVariantClass($row, variant);
 
           if (window.crud.rowStacks.top && rowData.___top_row) {
-              var $topRow = buildRow('top', rowData.___top_row);
+              var $topRow = buildRow('top', rowData.___top_row, entryId);
               applyVariantClass($topRow, variant);
               $topRow.insertBefore($row);
           }
@@ -484,7 +502,7 @@
 
           if (hasBottomRowForEntry) {
               var $target = $row.next();
-              var $bottomRow = buildRow('bottom', rowData.___bottom_row);
+              var $bottomRow = buildRow('bottom', rowData.___bottom_row, entryId);
               applyVariantClass($bottomRow, variant);
 
               if ($target.hasClass('child')) {
@@ -496,6 +514,42 @@
 
           applyRowSpansToBaseRow($row, hasBottomRowForEntry);
       });
+  };
+
+  window.crud.ensureDetailsRowAfterBottomStack = function (entryId, baseRow) {
+      if (!window.crud.rowStacks.bottom || !baseRow) {
+          return;
+      }
+
+      var $baseRow = $(baseRow);
+      var $bottomRow = $();
+      var $detailRow = $();
+
+      $baseRow.nextAll().each(function () {
+          var $current = $(this);
+          var isDetailRow = $current.hasClass('child') ||
+                            $current.hasClass('no-padding') ||
+                            $current.find('.table_row_slider').length;
+          var isStackRow = $current.hasClass('crud-row-stack');
+
+          if (isDetailRow && !$detailRow.length) {
+              $detailRow = $current;
+          }
+
+          if ($current.hasClass('crud-row-stack--bottom') && !$bottomRow.length) {
+              $bottomRow = $current;
+          }
+
+          if (!isDetailRow && !isStackRow) {
+              return false;
+          }
+      });
+
+      if (! $bottomRow.length || ! $detailRow.length) {
+          return;
+      }
+
+      $detailRow.insertAfter($bottomRow);
   };
 
   @if ($crud->hasTopRowColumns() || $crud->hasBottomRowColumns())

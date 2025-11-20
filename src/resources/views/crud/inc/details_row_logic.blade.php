@@ -38,11 +38,17 @@
                       row.child("<div class='table_row_slider'>" + data + "</div>", 'no-padding').show();
                       tr.addClass('shown');
                       $('div.table_row_slider', row.child()).slideDown();
+                      if (typeof crud.ensureDetailsRowAfterBottomStack === 'function') {
+                          crud.ensureDetailsRowAfterBottomStack(btn.data('entry-id'), tr);
+                      }
                     })
                     .fail(function(data) {
                       row.child("<div class='table_row_slider'>{{ trans('backpack::crud.details_row_loading_error') }}</div>").show();
                       tr.addClass('shown');
                       $('div.table_row_slider', row.child()).slideDown();
+                      if (typeof crud.ensureDetailsRowAfterBottomStack === 'function') {
+                          crud.ensureDetailsRowAfterBottomStack(btn.data('entry-id'), tr);
+                      }
                     });
                 }
             } );
