@@ -329,12 +329,22 @@ trait Search
             $view = 'crud::columns.text'; // fallback to text column
         }
 
+        $crud = $this;
+
         return \View::make($view)
             ->with('crud', $this)
             ->with('column', $column)
             ->with('entry', $entry)
             ->with('rowNumber', $rowNumber)
-            ->render();
+            ->render(function ($viewInstance, $contents) use ($crud) {
+                $styles = trim($viewInstance->getFactory()->yieldPushContent('crud_list_column_styles'));
+
+                if ($styles !== '') {
+                    $crud->recordListColumnStyleStack($styles);
+                }
+
+                return $contents;
+            });
     }
 
     /**

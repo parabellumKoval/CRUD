@@ -164,6 +164,9 @@
 
   <!-- CRUD LIST CONTENT - crud_list_styles stack -->
   @stack('crud_list_styles')
+
+  <!-- CRUD COLUMN CONTENT - crud_list_column_styles stack -->
+  @stack('crud_list_column_styles')
 @endsection
 
 @section('after_scripts')

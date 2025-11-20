@@ -152,6 +152,11 @@ trait ListOperation
             $json['data'][$i]['has_children'] = !empty($childrenMap[$id]);
         }
 
+        $columnStylesStack = $this->crud->pullListColumnStyleStacks();
+        if (! empty($columnStylesStack)) {
+            $json['column_styles'] = $columnStylesStack;
+        }
+
         return $json;
     }
 

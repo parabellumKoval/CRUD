@@ -109,6 +109,37 @@
     window.crud = {
       exportButtons: JSON.parse('{!! json_encode($crud->get('list.export_buttons')) !!}'),
       functionsToRunOnDataTablesDrawEvent: [],
+      columnStyleHashes: {},
+      ensureColumnStyles: function (payload) {
+          if (!payload) {
+              return;
+          }
+
+          var entries = Array.isArray(payload) ? payload : [payload];
+          var self = this;
+
+          entries.forEach(function (item) {
+              if (!item) {
+                  return;
+              }
+
+              var content = item.content || item;
+              if (!content) {
+                  return;
+              }
+
+              var hash = item.hash || content;
+              if (hash && self.columnStyleHashes[hash]) {
+                  return;
+              }
+
+              $('head').append(content);
+
+              if (hash) {
+                  self.columnStyleHashes[hash] = true;
+              }
+          });
+      },
       addFunctionToDataTablesDrawEventQueue: function (functionName) {
           if (this.functionsToRunOnDataTablesDrawEvent.indexOf(functionName) == -1) {
           this.functionsToRunOnDataTablesDrawEvent.push(functionName);
@@ -482,6 +513,12 @@
       if (window.crud.hasRowStacks) {
         $('#crudTable').addClass('has-row-stacks');
       }
+
+      $('#crudTable').on('xhr.dt', function (event, settings, json) {
+          if (json && json.column_styles) {
+              crud.ensureColumnStyles(json.column_styles);
+          }
+      });
 
       // move search bar
       $("#crudTable_filter").appendTo($('#datatable_search_stack' ));
