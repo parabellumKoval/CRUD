@@ -234,7 +234,42 @@ trait Search
             $row_items[0] = $details_row_button.$row_items[0];
         }
 
+        if ($topRow = $this->getStackedRowHtml('top', $entry, $rowNumber)) {
+            $row_items['___top_row'] = $topRow;
+        }
+
+        if ($bottomRow = $this->getStackedRowHtml('bottom', $entry, $rowNumber)) {
+            $row_items['___bottom_row'] = $bottomRow;
+        }
+
         return $row_items;
+    }
+
+    /**
+     * Render the HTML for the stacked row (top or bottom) for a given entry.
+     *
+     * @param  string  $stack
+     * @param  \Illuminate\Database\Eloquent\Model  $entry
+     * @param  bool|int  $rowNumber
+     * @return string|null
+     */
+    protected function getStackedRowHtml($stack, $entry, $rowNumber = false)
+    {
+        $columns = $stack === 'top' ? $this->columnsTopRow() : $this->columnsBottomRow();
+
+        if (! count($columns)) {
+            return null;
+        }
+
+        $html = '';
+
+        foreach ($columns as $column) {
+            $html .= $this->getCellView($column, $entry, $rowNumber);
+        }
+
+        $html = trim($html);
+
+        return $html === '' ? null : $html;
     }
 
     /**

@@ -84,6 +84,48 @@
 		vertical-align: middle;
 	}
 
+	#crudTable tbody tr.crud-row-stack td {
+		border-top: none;
+		border-bottom: none;
+		padding: 0;
+		background-color: inherit;
+	}
+
+	.crud-row-stack__cell {
+		padding: 0;
+		border: none;
+	}
+
+	.crud-row-stack__gap {
+		padding: 0;
+		border: none;
+		height: 0;
+		line-height: 0;
+		background: transparent;
+	}
+
+	#crudTable tbody tr.crud-row-stack:hover td {
+		background-color: inherit;
+	}
+
+	.crud-row-stack__content {
+		width: 100%;
+		padding: 0.75rem 1rem;
+	}
+
+	#crudTable.table-striped.has-row-stacks tbody tr:nth-of-type(odd),
+	#crudTable.table-striped.has-row-stacks tbody tr:nth-of-type(even) {
+		background-color: inherit;
+	}
+
+	#crudTable.table-striped.has-row-stacks tbody tr.crud-row-unit--even td {
+		background-color: rgba(0, 0, 0, .02);
+	}
+
+	#crudTable.table-striped.has-row-stacks tbody tr.crud-row-unit--odd td {
+		background-color: #fff;
+	}
+
 	#crudTable.has-hidden-columns .details-control {
 		/*display: none;*/
 	}

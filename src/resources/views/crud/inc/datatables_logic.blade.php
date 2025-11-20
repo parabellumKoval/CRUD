@@ -3,6 +3,18 @@
     // and flush them from session, so we will get them later from localStorage.
     $backpack_alerts = \Alert::getMessages();
     \Alert::flush();
+
+    $rowStackColspan = count($crud->columns());
+    if ($crud->buttons()->where('stack', 'line')->count()) {
+        $rowStackColspan++;
+    }
+    $rowStackColspan = max(1, $rowStackColspan);
+
+    $rowStackLayouts = [
+        'top' => $crud->getRowStackLayout('top'),
+        'bottom' => $crud->getRowStackLayout('bottom'),
+    ];
+
  @endphp
 
   {{-- DATA TABLES SCRIPT --}}
@@ -254,6 +266,210 @@
             "<'row mt-2 d-print-none '<'col-sm-12 col-md-4'l><'col-sm-0 col-md-4 text-center'B><'col-sm-12 col-md-4 'p>>",
       }
   }
+
+  window.crud.rowStacks = {
+      top: @json($crud->hasTopRowColumns()),
+      bottom: @json($crud->hasBottomRowColumns()),
+  };
+  window.crud.rowStackLayouts = @json($rowStackLayouts);
+  window.crud.hasRowStacks = window.crud.rowStacks.top || window.crud.rowStacks.bottom;
+  window.crud.rowStackColspan = {{ $rowStackColspan }};
+  window.crud.rowStackColumnInfo = null;
+  window.crud.getActualColumnIndexFromUserIndex = function(userIndex, isStart) {
+      if (!this.rowStackColumnInfo) {
+          this.rowStackColumnInfo = this.computeRowStackColumnInfo();
+      }
+
+      var info = this.rowStackColumnInfo;
+      if (!info.total) {
+            return 0;
+      }
+
+      if (!userIndex || userIndex < 1) {
+          return isStart ? 0 : info.total - 1;
+      }
+
+      var parsed = parseInt(userIndex, 10);
+      if (isNaN(parsed)) {
+          return isStart ? 0 : info.total - 1;
+      }
+
+      var match = info.userColumns.find(function(column) {
+          return column.userIndex === parsed;
+      });
+
+      if (match) {
+          return match.index;
+      }
+
+      if (parsed > info.maxUserIndex) {
+          var lastUser = info.userColumns[info.userColumns.length - 1];
+          if (lastUser) {
+              return lastUser.index;
+          }
+      }
+
+      var firstUser = info.userColumns[0];
+      if (firstUser) {
+          return firstUser.index;
+      }
+
+      return isStart ? 0 : info.total - 1;
+  };
+  window.crud.computeRowStackColumnInfo = function () {
+      var headerColumns = $('#crudTable thead tr').first().find('th');
+      var info = {
+          total: headerColumns.length,
+          userColumns: [],
+          maxUserIndex: 0
+      };
+
+      headerColumns.each(function(index) {
+          var userIndex = $(this).data('row-stack-user-index');
+          var parsed = parseInt(userIndex, 10);
+
+          if (!isNaN(parsed)) {
+              info.userColumns.push({ index: index, userIndex: parsed });
+              if (parsed > info.maxUserIndex) {
+                  info.maxUserIndex = parsed;
+              }
+          }
+      });
+
+      return info;
+  };
+  window.crud.resolveRowStackSpan = function (stack) {
+      if (!this.rowStacks[stack]) {
+          return null;
+      }
+
+      var layout = this.rowStackLayouts[stack] || {};
+      var spanStart = this.getActualColumnIndexFromUserIndex(layout.colspan_start, true);
+      var spanEnd = this.getActualColumnIndexFromUserIndex(layout.colspan_end, false);
+      
+      if (spanEnd < spanStart) {
+          spanEnd = spanStart;
+      }
+
+      if (spanStart < 0) {
+          spanStart = 0;
+      }
+
+      if (!this.rowStackColumnInfo) {
+          this.rowStackColumnInfo = this.computeRowStackColumnInfo();
+      }
+
+      if (spanEnd >= this.rowStackColumnInfo.total) {
+          spanEnd = this.rowStackColumnInfo.total - 1;
+      }
+
+      return {
+          start: spanStart,
+          end: spanEnd
+      };
+  };
+  window.crud.insertRowStacks = function () {
+      if (!window.crud.hasRowStacks || !window.crud.table) {
+          return;
+      }
+
+      window.crud.rowStackColumnInfo = window.crud.computeRowStackColumnInfo();
+      var totalColumns = window.crud.rowStackColumnInfo.total || window.crud.rowStackColspan || $('#crudTable thead tr:first th').length || 1;
+      var spanTop = window.crud.resolveRowStackSpan('top');
+      var spanBottom = window.crud.resolveRowStackSpan('bottom');
+
+      var buildRow = function (position, html) {
+          var span = position === 'top' ? spanTop : spanBottom;
+          if (!span) {
+              span = { start: 0, end: totalColumns - 1 };
+          }
+
+          var width = span.end - span.start + 1;
+          var $row = $("<tr class='crud-row-stack crud-row-stack--"+position+"'></tr>");
+
+          if (position === 'top' && span.start > 0) {
+              $row.append("<td class='crud-row-stack__gap' colspan='"+span.start+"'></td>");
+          }
+
+          var $cell = $("<td class='crud-row-stack__cell' colspan='"+width+"'></td>");
+          var $content = $("<div class='crud-row-stack__content' data-stack='"+position+"'></div>");
+          $content.html(html);
+          $cell.append($content);
+          $row.append($cell);
+
+          if (position === 'top' && span.end < totalColumns - 1) {
+              var trailing = totalColumns - span.end - 1;
+              $row.append("<td class='crud-row-stack__gap' colspan='"+trailing+"'></td>");
+          }
+
+          return $row;
+      };
+
+      var applyVariantClass = function ($targetRow, variant) {
+          if (! $targetRow || ! $targetRow.length) {
+              return;
+          }
+
+          $targetRow.removeClass('crud-row-unit crud-row-unit--odd crud-row-unit--even')
+                    .addClass('crud-row-unit crud-row-unit--'+variant);
+      };
+
+      var applyRowSpansToBaseRow = function ($baseRow, hasBottomRow) {
+          if (!hasBottomRow || !spanBottom) {
+              $baseRow.find('td[data-row-stack-rowspan]').removeAttr('rowspan data-row-stack-rowspan');
+              return;
+          }
+
+          var rowspanValue = 2;
+          var columnIndex = 0;
+
+          $baseRow.find('td').each(function () {
+              if (columnIndex < spanBottom.start || columnIndex > spanBottom.end) {
+                  $(this).attr('rowspan', rowspanValue).attr('data-row-stack-rowspan', 'true');
+              } else {
+                  $(this).removeAttr('rowspan data-row-stack-rowspan');
+              }
+
+              columnIndex++;
+          });
+      };
+
+      $('#crudTable tbody tr.crud-row-stack').remove();
+
+      window.crud.table.rows({page:'current'}).every(function () {
+          var rowData = this.data() || {};
+          var $row = $(this.node());
+          var variant = $row.hasClass('even') ? 'even' : 'odd';
+
+          applyVariantClass($row, variant);
+
+          if (window.crud.rowStacks.top && rowData.___top_row) {
+              var $topRow = buildRow('top', rowData.___top_row);
+              applyVariantClass($topRow, variant);
+              $topRow.insertBefore($row);
+          }
+
+          var hasBottomRowForEntry = window.crud.rowStacks.bottom && rowData.___bottom_row;
+
+          if (hasBottomRowForEntry) {
+              var $target = $row.next();
+              var $bottomRow = buildRow('bottom', rowData.___bottom_row);
+              applyVariantClass($bottomRow, variant);
+
+              if ($target.hasClass('child')) {
+                  $bottomRow.insertBefore($target);
+              } else {
+                  $bottomRow.insertAfter($row);
+              }
+          }
+
+          applyRowSpansToBaseRow($row, hasBottomRowForEntry);
+      });
+  };
+
+  @if ($crud->hasTopRowColumns() || $crud->hasBottomRowColumns())
+      window.crud.addFunctionToDataTablesDrawEventQueue('crud.insertRowStacks');
+  @endif
   </script>
 
   @include('crud::inc.export_buttons')
@@ -262,6 +478,10 @@
     jQuery(document).ready(function($) {
 
       window.crud.table = $("#crudTable").DataTable(window.crud.dataTableConfiguration);
+
+      if (window.crud.hasRowStacks) {
+        $('#crudTable').addClass('has-row-stacks');
+      }
 
       // move search bar
       $("#crudTable_filter").appendTo($('#datatable_search_stack' ));

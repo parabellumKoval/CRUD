@@ -87,6 +87,86 @@ trait Columns
     }
 
     /**
+     * Add a column that should be rendered in the extra top row for each entry.
+     *
+     * @param  array|string  $column
+     * @return self
+     */
+    public function addColumnTopRow($column)
+    {
+        return $this->addColumnToRowStack($column, 'top');
+    }
+
+    /**
+     * Add a column that should be rendered in the extra bottom row for each entry.
+     *
+     * @param  array|string  $column
+     * @return self
+     */
+    public function addColumnBottomRow($column)
+    {
+        return $this->addColumnToRowStack($column, 'bottom');
+    }
+
+    /**
+     * Replace all columns defined for the extra top row.
+     *
+     * @param  array|string  $columns
+     */
+    public function setColumnsTopRow($columns)
+    {
+        $this->removeAllColumnsTopRow();
+        $this->addColumnsToRowStack($columns, 'top');
+    }
+
+    /**
+     * Replace all columns defined for the extra bottom row.
+     *
+     * @param  array|string  $columns
+     */
+    public function setColumnsBottomRow($columns)
+    {
+        $this->removeAllColumnsBottomRow();
+        $this->addColumnsToRowStack($columns, 'bottom');
+    }
+
+    /**
+     * Get the CRUD columns configured for the extra top row.
+     *
+     * @return array
+     */
+    public function columnsTopRow()
+    {
+        return $this->getOperationSetting('columnsTopRow') ?? [];
+    }
+
+    /**
+     * Get the CRUD columns configured for the extra bottom row.
+     *
+     * @return array
+     */
+    public function columnsBottomRow()
+    {
+        return $this->getOperationSetting('columnsBottomRow') ?? [];
+    }
+
+    /**
+     * Determine if the top row has at least one column registered.
+     */
+    public function hasTopRowColumns()
+    {
+        return count($this->columnsTopRow()) > 0;
+    }
+
+    /**
+     * Determine if the bottom row has at least one column registered.
+     */
+    public function hasBottomRowColumns()
+    {
+        return count($this->columnsBottomRow()) > 0;
+    }
+
+    /**
      * Move the most recently added column after the given target column.
      *
      * @param  string|array  $targetColumn  The target column name or array.
@@ -414,5 +494,147 @@ trait Columns
     public function column($name)
     {
         return new CrudColumn($name);
+    }
+
+    /**
+     * Add a column definition to one of the stacked rows.
+     *
+     * @param  array|string  $column
+     * @param  string  $stack  Either "top" or "bottom".
+     * @return self
+     */
+    protected function addColumnToRowStack($column, $stack)
+    {
+        $column = $this->makeSureColumnHasNeededAttributes($column);
+        $column = $this->prepareRowStackColumn($column, $stack);
+        $column = $this->extractRowStackLayoutFromColumn($column, $stack);
+        $this->addColumnToRowStackSettings($column, $stack);
+
+        return $this;
+    }
+
+    /**
+     * Add multiple columns definitions to a stacked row.
+     *
+     * @param  array|string  $columns
+     * @param  string  $stack
+     */
+    protected function addColumnsToRowStack($columns, $stack)
+    {
+        if (is_array($columns) && count($columns)) {
+            if (Arr::isAssoc($columns) && array_key_exists('name', $columns)) {
+                $this->addColumnToRowStack($columns, $stack);
+
+                return;
+            }
+
+            foreach ($columns as $column) {
+                if (is_array($column)) {
+                    $this->addColumnToRowStack($column, $stack);
+                } else {
+                    $this->addColumnToRowStack([
+                        'name'  => $column,
+                        'label' => mb_ucfirst($column),
+                        'type'  => 'text',
+                    ], $stack);
+                }
+            }
+        }
+
+        if (is_string($columns)) {
+            $this->addColumnToRowStack([
+                'name'  => $columns,
+                'label' => mb_ucfirst($columns),
+                'type'  => 'text',
+            ], $stack);
+        }
+    }
+
+    /**
+     * Ensure row stack columns don't try to behave as regular table columns.
+     *
+     * @param  array  $column
+     * @param  string  $stack
+     * @return array
+     */
+    protected function prepareRowStackColumn($column, $stack)
+    {
+        $column['tableColumn'] = false;
+        $column['orderable'] = false;
+        $column['searchLogic'] = false;
+        $column['row_stack'] = $stack;
+
+        return $column;
+    }
+
+    /**
+     * If the developer specified layout options (colspan range) when registering the stack column,
+     * persist them as stack-level settings and remove them from the column definition.
+     */
+    protected function extractRowStackLayoutFromColumn($column, $stack)
+    {
+        $layout = [];
+
+        if (array_key_exists('colspan_start', $column)) {
+            $layout['colspan_start'] = $column['colspan_start'];
+            unset($column['colspan_start']);
+        }
+
+        if (array_key_exists('colspan_end', $column)) {
+            $layout['colspan_end'] = $column['colspan_end'];
+            unset($column['colspan_end']);
+        }
+
+        if (! empty($layout)) {
+            $this->setRowStackLayout($stack, $layout);
+        }
+
+        return $column;
+    }
+
+    /**
+     * Clear all stacked-row columns for the top position.
+     */
+    public function removeAllColumnsTopRow()
+    {
+        $this->setOperationSetting('columnsTopRow', []);
+    }
+
+    /**
+     * Clear all stacked-row columns for the bottom position.
+     */
+    public function removeAllColumnsBottomRow()
+    {
+        $this->setOperationSetting('columnsBottomRow', []);
+    }
+
+    /**
+     * Persist layout settings (colspan ranges) for a stacked row.
+     */
+    protected function setRowStackLayout($stack, array $layout)
+    {
+        $currentLayouts = $this->getOperationSetting('rowStackLayouts') ?? [];
+        $currentLayout = $currentLayouts[$stack] ?? [];
+
+        $layout = array_merge($currentLayout, array_filter([
+            'colspan_start' => isset($layout['colspan_start']) ? (int) $layout['colspan_start'] : null,
+            'colspan_end'   => isset($layout['colspan_end']) ? (int) $layout['colspan_end'] : null,
+        ], function ($value) {
+            return $value !== null;
+        }));
+
+        $currentLayouts[$stack] = $layout;
+
+        $this->setOperationSetting('rowStackLayouts', $currentLayouts);
+    }
+
+    /**
+     * Retrieve the stored layout settings for a stacked row.
+     */
+    public function getRowStackLayout($stack)
+    {
+        $layouts = $this->getOperationSetting('rowStackLayouts') ?? [];
+
+        return $layouts[$stack] ?? [];
     }
 }

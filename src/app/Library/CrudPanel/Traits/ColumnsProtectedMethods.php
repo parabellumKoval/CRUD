@@ -21,6 +21,21 @@ trait ColumnsProtectedMethods
     }
 
     /**
+     * Add a column definition to one of the stacked rows (top or bottom).
+     *
+     * @param  array  $column
+     * @param  string  $stack
+     */
+    protected function addColumnToRowStackSettings($column, $stack)
+    {
+        $settingKey = $stack === 'top' ? 'columnsTopRow' : 'columnsBottomRow';
+        $allColumns = $this->getOperationSetting($settingKey) ?? [];
+        $allColumns = Arr::add($allColumns, $column['key'], $column);
+
+        $this->setOperationSetting($settingKey, $allColumns);
+    }
+
+    /**
      * If a column priority has not been defined, provide a default one.
      *
      * @param  array  $column  Column definition array.
